@@ -1,3 +1,4 @@
+// chat-app/backend/src/controllers/auth.controller.js
 import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
@@ -28,7 +29,6 @@ export const signup = async (req, res) => {
     });
 
     if (newUser) {
-      // generate jwt token here
       generateToken(newUser._id, res);
       await newUser.save();
 
@@ -37,6 +37,7 @@ export const signup = async (req, res) => {
         fullName: newUser.fullName,
         email: newUser.email,
         profilePic: newUser.profilePic,
+        isAdmin: newUser.isAdmin,
       });
     } else {
       res.status(400).json({ message: "Invalid user data" });
@@ -56,6 +57,10 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({ message: "Your account is banned. Contact support." });
+    }
+
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -68,6 +73,7 @@ export const login = async (req, res) => {
       fullName: user.fullName,
       email: user.email,
       profilePic: user.profilePic,
+      isAdmin: user.isAdmin,
     });
   } catch (error) {
     console.log("Error in login controller", error.message);

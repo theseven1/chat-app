@@ -1,3 +1,4 @@
+// chat-app/backend/src/models/user.model.js
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema(
@@ -20,6 +21,26 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    isBanned: {
+      type: Boolean,
+      default: false,
+    },
+    friends: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    friendRequests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
   { timestamps: true }
 );

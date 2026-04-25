@@ -1,15 +1,29 @@
+// chat-app/backend/src/controllers/message.controller.js
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 
 import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io } from "../lib/socket.js";
+import { encrypt, decrypt } from "../lib/encryption.js";
 
 export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
-    const filteredUsers = await User.find({ _id: { $ne: loggedInUserId } }).select("-password");
+    
+    // Fetch only accepted friends
+    const user = await User.findById(loggedInUserId).populate("friends", "-password");
+    const friendIds = user.friends.map(f => f._id.toString());
 
-    res.status(200).json(filteredUsers);
+    // Allow displaying users who have sent a system message to you
+    const systemMessages = await Message.find({ receiverId: loggedInUserId, isSystem: true });
+    const systemSenderIds = systemMessages.map(m => m.senderId.toString());
+
+    const extraIds = [...new Set(systemSenderIds)].filter(id => !friendIds.includes(id));
+    const extraUsers = await User.find({ _id: { $in: extraIds } }).select("-password");
+
+    const allSidebarUsers = [...user.friends, ...extraUsers];
+
+    res.status(200).json(allSidebarUsers);
   } catch (error) {
     console.error("Error in getUsersForSidebar: ", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -28,7 +42,12 @@ export const getMessages = async (req, res) => {
       ],
     });
 
-    res.status(200).json(messages);
+    const decryptedMessages = messages.map(msg => ({
+      ...msg._doc,
+      text: decrypt(msg.text)
+    }));
+
+    res.status(200).json(decryptedMessages);
   } catch (error) {
     console.log("Error in getMessages controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
@@ -43,7 +62,6 @@ export const sendMessage = async (req, res) => {
 
     let imageUrl;
     if (image) {
-      // Upload base64 image to cloudinary
       const uploadResponse = await cloudinary.uploader.upload(image);
       imageUrl = uploadResponse.secure_url;
     }
@@ -51,18 +69,24 @@ export const sendMessage = async (req, res) => {
     const newMessage = new Message({
       senderId,
       receiverId,
-      text,
+      text: encrypt(text),
       image: imageUrl,
     });
 
     await newMessage.save();
 
+    // Prepare decrypted text to emit back
+    const messageToSend = {
+      ...newMessage._doc,
+      text: decrypt(newMessage.text)
+    };
+
     const receiverSocketId = getReceiverSocketId(receiverId);
     if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+      io.to(receiverSocketId).emit("newMessage", messageToSend);
     }
 
-    res.status(201).json(newMessage);
+    res.status(201).json(messageToSend);
   } catch (error) {
     console.log("Error in sendMessage controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });

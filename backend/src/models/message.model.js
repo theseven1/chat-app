@@ -1,3 +1,4 @@
+// chat-app/backend/src/models/message.model.js
 import mongoose from "mongoose";
 
 const messageSchema = new mongoose.Schema(
@@ -18,6 +19,10 @@ const messageSchema = new mongoose.Schema(
     image: {
       type: String,
     },
+    isSystem: {
+      type: Boolean,
+      default: false,
+    }
   },
   { timestamps: true }
 );
