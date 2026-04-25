@@ -29,7 +29,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get("/users/requests");
       set({ friendRequests: res.data });
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to load requests");
+      console.error(error);
     }
   },
 
@@ -64,6 +64,19 @@ export const useChatStore = create((set, get) => ({
       toast.success("Friend request declined");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to decline request");
+    }
+  },
+
+  removeFriend: async (id) => {
+    try {
+      await axiosInstance.delete(`/users/remove/${id}`);
+      set(state => ({
+        users: state.users.filter(u => u._id !== id),
+        selectedUser: state.selectedUser?._id === id ? null : state.selectedUser
+      }));
+      toast.success("Friend removed and messages erased");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to remove friend");
     }
   },
 
@@ -106,13 +119,18 @@ export const useChatStore = create((set, get) => ({
     const socket = useAuthStore.getState().socket;
 
     socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
       const isSystemMessage = newMessage.isSystem; 
-      if (!isMessageSentFromSelectedUser && !isSystemMessage && newMessage.receiverId !== selectedUser._id) return;
       
-      set({
-        messages: [...get().messages, newMessage],
-      });
+      if (isSystemMessage) {
+         if (get().selectedUser?._id === "system") {
+             set({ messages: [...get().messages, newMessage] });
+         }
+      } else {
+         const isRelevant = get().selectedUser?._id === newMessage.senderId || get().selectedUser?._id === newMessage.receiverId;
+         if (isRelevant) {
+             set({ messages: [...get().messages, newMessage] });
+         }
+      }
     });
 
     socket.on("messageDeleted", (messageId) => {
@@ -120,12 +138,20 @@ export const useChatStore = create((set, get) => ({
         messages: get().messages.filter(m => m._id !== messageId),
       });
     });
+
+    socket.on("friendRemoved", (removerId) => {
+      set((state) => ({
+         users: state.users.filter(u => u._id !== removerId),
+         selectedUser: state.selectedUser?._id === removerId ? null : state.selectedUser
+      }));
+    });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
     socket.off("newMessage");
     socket.off("messageDeleted");
+    socket.off("friendRemoved");
   },
 
   setSelectedUser: (selectedUser) => set({ selectedUser }),

@@ -10,18 +10,21 @@ export const getUsersForSidebar = async (req, res) => {
   try {
     const loggedInUserId = req.user._id;
     
-    // Fetch only accepted friends
     const user = await User.findById(loggedInUserId).populate("friends", "-password");
-    const friendIds = user.friends.map(f => f._id.toString());
+    let allSidebarUsers = [...user.friends];
 
-    // Allow displaying users who have sent a system message to you
-    const systemMessages = await Message.find({ receiverId: loggedInUserId, isSystem: true });
-    const systemSenderIds = systemMessages.map(m => m.senderId.toString());
-
-    const extraIds = [...new Set(systemSenderIds)].filter(id => !friendIds.includes(id));
-    const extraUsers = await User.find({ _id: { $in: extraIds } }).select("-password");
-
-    const allSidebarUsers = [...user.friends, ...extraUsers];
+    // Check if the user has received any system messages
+    const hasSystemMessages = await Message.exists({ receiverId: loggedInUserId, isSystem: true });
+    
+    if (hasSystemMessages) {
+      // Append a virtual System user
+      allSidebarUsers.unshift({
+        _id: "system",
+        fullName: "System",
+        profilePic: "https://res.cloudinary.com/dscifeehs/image/upload/v1777099940/osi-brands-solid_p6fbet.png",
+        isSystemUser: true,
+      });
+    }
 
     res.status(200).json(allSidebarUsers);
   } catch (error) {
@@ -35,12 +38,17 @@ export const getMessages = async (req, res) => {
     const { id: userToChatId } = req.params;
     const myId = req.user._id;
 
-    const messages = await Message.find({
-      $or: [
-        { senderId: myId, receiverId: userToChatId },
-        { senderId: userToChatId, receiverId: myId },
-      ],
-    });
+    let messages;
+    if (userToChatId === "system") {
+       messages = await Message.find({ receiverId: myId, isSystem: true });
+    } else {
+       messages = await Message.find({
+        $or: [
+          { senderId: myId, receiverId: userToChatId, isSystem: false },
+          { senderId: userToChatId, receiverId: myId, isSystem: false },
+        ],
+      });
+    }
 
     const decryptedMessages = messages.map(msg => ({
       ...msg._doc,
@@ -60,6 +68,10 @@ export const sendMessage = async (req, res) => {
     const { id: receiverId } = req.params;
     const senderId = req.user._id;
 
+    if (receiverId === "system") {
+        return res.status(403).json({ error: "Cannot reply to System messages" });
+    }
+
     let imageUrl;
     if (image) {
       const uploadResponse = await cloudinary.uploader.upload(image);
@@ -75,7 +87,6 @@ export const sendMessage = async (req, res) => {
 
     await newMessage.save();
 
-    // Prepare decrypted text to emit back
     const messageToSend = {
       ...newMessage._doc,
       text: decrypt(newMessage.text)

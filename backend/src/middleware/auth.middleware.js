@@ -23,7 +23,7 @@ export const protectRoute = async (req, res, next) => {
     }
 
     if (user.isBanned) {
-      return res.status(403).json({ message: "Your account is banned." });
+      return res.status(403).json({ message: "Your account is banned. Contact support." });
     }
 
     req.user = user;
@@ -43,6 +43,17 @@ export const requireAdmin = async (req, res, next) => {
     next();
   } catch (error) {
     console.log("Error in requireAdmin middleware: ", error.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const requireNotTimedOut = async (req, res, next) => {
+  try {
+    if (req.user.timeoutUntil && new Date(req.user.timeoutUntil) > new Date()) {
+      return res.status(403).json({ message: `You are timed out. Please wait until the timeout expires.` });
+    }
+    next();
+  } catch (error) {
     res.status(500).json({ message: "Internal server error" });
   }
 };

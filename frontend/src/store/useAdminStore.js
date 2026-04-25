@@ -31,6 +31,30 @@ export const useAdminStore = create((set) => ({
     }
   },
 
+  timeoutUser: async (userId, durationMinutes) => {
+    try {
+      const res = await axiosInstance.put(`/admin/users/${userId}/timeout`, { durationMinutes });
+      set((state) => ({
+        users: state.users.map((user) => (user._id === userId ? res.data : user)),
+      }));
+      toast.success(`User timed out for ${durationMinutes} minutes`);
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to apply timeout");
+    }
+  },
+
+  removeTimeout: async (userId) => {
+    try {
+      const res = await axiosInstance.put(`/admin/users/${userId}/untimeout`);
+      set((state) => ({
+        users: state.users.map((user) => (user._id === userId ? res.data : user)),
+      }));
+      toast.success("Timeout removed");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to remove timeout");
+    }
+  },
+
   sendSystemMessage: async (targetUserId, text) => {
     try {
       await axiosInstance.post("/admin/messages/system", { targetUserId, text });

@@ -1,5 +1,7 @@
 // chat-app/backend/src/controllers/user.controller.js
 import User from "../models/user.model.js";
+import Message from "../models/message.model.js";
+import { getReceiverSocketId, io } from "../lib/socket.js";
 
 export const sendFriendRequest = async (req, res) => {
   try {
@@ -68,6 +70,36 @@ export const declineFriendRequest = async (req, res) => {
     res.status(200).json({ message: "Request declined" });
   } catch (error) {
     console.error("Error in declineFriendRequest:", error.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const removeFriend = async (req, res) => {
+  try {
+    const friendId = req.params.id;
+    const myId = req.user._id;
+
+    // Remove from both friends arrays
+    await User.findByIdAndUpdate(myId, { $pull: { friends: friendId } });
+    await User.findByIdAndUpdate(friendId, { $pull: { friends: myId } });
+
+    // Erase entire conversation history
+    await Message.deleteMany({
+      $or: [
+        { senderId: myId, receiverId: friendId },
+        { senderId: friendId, receiverId: myId }
+      ]
+    });
+
+    // Notify the other user in real-time
+    const friendSocketId = getReceiverSocketId(friendId);
+    if (friendSocketId) {
+      io.to(friendSocketId).emit("friendRemoved", myId);
+    }
+
+    res.status(200).json({ message: "Friend removed." });
+  } catch (error) {
+    console.error("Error in removeFriend:", error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 };

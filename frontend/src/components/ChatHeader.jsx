@@ -1,9 +1,10 @@
-import { X } from "lucide-react";
+// chat-app/frontend/src/components/ChatHeader.jsx
+import { X, UserMinus, BadgeCheck } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 
 const ChatHeader = () => {
-  const { selectedUser, setSelectedUser } = useChatStore();
+  const { selectedUser, setSelectedUser, removeFriend } = useChatStore();
   const { onlineUsers } = useAuthStore();
 
   return (
@@ -19,17 +20,33 @@ const ChatHeader = () => {
 
           {/* User info */}
           <div>
-            <h3 className="font-medium">{selectedUser.fullName}</h3>
+            <h3 className="font-medium flex items-center gap-1">
+                {selectedUser.fullName}
+                {selectedUser.isSystemUser && <BadgeCheck className="size-4 text-blue-500" title="Verified System" />}
+            </h3>
             <p className="text-sm text-base-content/70">
-              {onlineUsers.includes(selectedUser._id) ? "Online" : "Offline"}
+              {selectedUser.isSystemUser ? "System Notifications" : (onlineUsers.includes(selectedUser._id) ? "Online" : "Offline")}
             </p>
           </div>
         </div>
 
-        {/* Close button */}
-        <button onClick={() => setSelectedUser(null)}>
-          <X />
-        </button>
+        <div className="flex items-center gap-2">
+            {/* Remove Friend Button */}
+            {!selectedUser.isSystemUser && (
+                <button onClick={() => {
+                    if (window.confirm("Are you sure you want to remove this friend? The entire conversation history will be permanently erased.")) {
+                        removeFriend(selectedUser._id);
+                    }
+                }} className="btn btn-ghost btn-circle text-error" title="Remove Friend">
+                    <UserMinus className="size-5" />
+                </button>
+            )}
+
+            {/* Close button */}
+            <button onClick={() => setSelectedUser(null)} className="btn btn-ghost btn-circle">
+                <X className="size-5" />
+            </button>
+        </div>
       </div>
     </div>
   );
